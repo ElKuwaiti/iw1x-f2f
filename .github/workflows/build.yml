@@ -20,5 +20,5 @@ jobs:
     - name: Upload .so
       uses: actions/upload-artifact@v4
       with:
-        name: iw1x
-        path: build/iw1x.so
+        name: f2f
+        path: build/f2f.so
