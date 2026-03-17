@@ -582,6 +582,9 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
 
+                int ack = cl->messageAcknowledge & PACKET_MASK;
+                cl->frames[ack].messageAcked = svs.time;    
+
                 if (cl->messageAcknowledge < 0) {
                     Com_Printf("Invalid reliableAcknowledge message from %s - reliableAcknowledge is %i\n", cl->name, cl->reliableAcknowledge);
                     return;
