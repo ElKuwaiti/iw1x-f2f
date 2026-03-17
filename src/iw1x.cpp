@@ -1089,64 +1089,81 @@ void custom_SVC_Status(netadr_t from)
     char infostring[MAX_INFO_STRING];
     char keywords[MAX_INFO_STRING];
     char status[MAX_MSGLEN];
-    int statusLength;
-    size_t playerLength;
+    int statusLength = 0;
     int i;
     client_t* cl;
-    char* g_password;
 
     if (SVC_ApplyStatusLimit(from))
         return;
 
     strcpy(infostring, Cvar_InfoString(CVAR_SERVERINFO));
-
     Info_SetValueForKey(infostring, "challenge", Cmd_Argv(1));
 
-    if (Cvar_VariableValue("fs_restrict")) {
+    if (Cvar_VariableValue("fs_restrict"))
+    {
         Com_sprintf(keywords, sizeof(keywords), "demo %s", Info_ValueForKey(infostring, "sv_keywords"));
         Info_SetValueForKey(infostring, "sv_keywords", keywords);
     }
 
     status[0] = 0;
-    statusLength = 0;
-    for (i = 0; i < sv_maxclients->integer; i++) {
+
+    for (i = 0; i < sv_maxclients->integer; i++)
+    {
         cl = &svs.clients[i];
-        if (cl->state >= CS_CONNECTED) {
-            int clientScore = 0;
-            int clientDeath = 0;
-            if (gvm) {
-                clientScore = VM_Call(gvm, GAME_CLIENT_SCORE_GET, cl - svs.clients);
-                if (cl->gentity)
-                    clientDeath = cl->gentity->client->sess.deaths;
-            }
 
-            if (sv_statusShowDeath->integer)
-                int realPing = Sys_Milliseconds() - cl->lastPacketTime;
-                Com_sprintf(player, sizeof(player), "%s %i \"%s\"\n", va("k:%i;d:%i", clientScore, clientDeath), realPing, cl->name);
-            else
-                int realPing = Sys_Milliseconds() - cl->lastPacketTime;
-                Com_sprintf(player, sizeof(player), "%i %i \"%s\"\n", clientScore, realPing, cl->name);
+        if (cl->state < CS_CONNECTED)
+            continue;
 
-            playerLength = strlen(player);
-            if (statusLength + playerLength >= sizeof(status))
-                break;
+        int clientScore = 0;
+        int clientDeath = 0;
 
-            strcpy(status + statusLength, player);
-            statusLength += playerLength;
+        if (gvm)
+        {
+            clientScore = VM_Call(gvm, GAME_CLIENT_SCORE_GET, cl - svs.clients);
+            if (cl->gentity)
+                clientDeath = cl->gentity->client->sess.deaths;
         }
+
+        int realPing = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime);
+
+        if (realPing < 0 || realPing > 9999)
+            realPing = cl->ping;  
+
+        if (sv_statusShowDeath->integer)
+        {
+            Com_sprintf(player, sizeof(player),
+                        "%s %i \"%s\"\n",
+                        va("k:%i;d:%i", clientScore, clientDeath),
+                        realPing,
+                        cl->name);
+        }
+        else
+        {
+            Com_sprintf(player, sizeof(player),
+                        "%i %i \"%s\"\n",
+                        clientScore,
+                        realPing,
+                        cl->name);
+        }
+
+        size_t playerLength = strlen(player);
+        if (statusLength + playerLength >= sizeof(status))
+            break;
+
+        strcpy(status + statusLength, player);
+        statusLength += playerLength;
     }
 
-    g_password = Cvar_VariableString("g_password");
+    char* g_password = Cvar_VariableString("g_password");
     Info_SetValueForKey(infostring, "pswrd", va("%i", *g_password ? 1 : 0));
 
-    // Inform about fs_game usage, by default for player's convenience
+    // Inform about fs_game usage
     Info_SetValueForKey(infostring, "fs_game", va("%s", *fs_game->string ? fs_game->string : "0"));
 
-    if (sv_statusShowTeamScore->integer) {
-        if (gvm) {
-            Info_SetValueForKey(infostring, "score_allies", va("%i", level->teamScores[2]));
-            Info_SetValueForKey(infostring, "score_axis", va("%i", level->teamScores[1]));
-        }
+    if (sv_statusShowTeamScore->integer && gvm)
+    {
+        Info_SetValueForKey(infostring, "score_allies", va("%i", level->teamScores[2]));
+        Info_SetValueForKey(infostring, "score_axis", va("%i", level->teamScores[1]));
     }
 
     NET_OutOfBandPrint(NS_SERVER, from, "statusResponse\n%s\n%s", infostring, status);
@@ -2866,39 +2883,49 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
     int stringlength;
     char string[1400];
     char entry[1024];
-    int visiblePlayers;
+    int visiblePlayers = 0;
 
     string[0] = 0;
     stringlength = 0;
-    visiblePlayers = 0;
 
     numSorted = level->numConnectedClients;
-
     if (level->numConnectedClients > MAX_CLIENTS)
         numSorted = MAX_CLIENTS;
 
-    for (i = 0; i < numSorted; i++) {
+    for (i = 0; i < numSorted; i++)
+    {
         clientNum = level->sortedClients[i];
         client = &level->clients[clientNum];
+
         if (customPlayerState[clientNum].hiddenFromScoreboard)
             continue;
 
-        if (client->sess.connected == CON_CONNECTING) {
-            Com_sprintf(entry, 0x400u, " %i %i %i %i %i", level->sortedClients[i], client->sess.score, -1, client->sess.deaths, client->sess.statusIcon);
+        if (client->sess.connected == CON_CONNECTING)
+        {
+            Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
+                        level->sortedClients[i],
+                        client->sess.score,
+                        -1,
+                        client->sess.deaths,
+                        client->sess.statusIcon);
         }
-        else {
-            /*
-            Send cl->ping instead of cl->ps.ping,
-            to fix the scoreboard showing the ping of the player your are spectating as being your own ping.
-            */
-            ping = Sys_Milliseconds() - svs.clients[clientNum].lastPacketTime;
+        else
+        {
+            ping = (int)(Sys_Milliseconds64() - (uint64_t)svs.clients[clientNum].lastPacketTime);
 
-            Com_sprintf(entry, 0x400u, " %i %i %i %i %i", level->sortedClients[i], client->sess.score, ping, client->sess.deaths, client->sess.statusIcon);
+            if (ping < 0 || ping > 9999)
+                ping = svs.clients[clientNum].ping;
+
+            Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
+                        level->sortedClients[i],
+                        client->sess.score,
+                        ping,
+                        client->sess.deaths,
+                        client->sess.statusIcon);
         }
 
         len = strlen(entry);
-
-        if (stringlength + len > 1024)
+        if (stringlength + len > sizeof(string) - 1)
             break;
 
         strcpy(&string[stringlength], entry);
@@ -2906,7 +2933,8 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
         visiblePlayers++;
     }
 
-    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE, va("b %i %i %i%s", visiblePlayers, level->teamScores[1], level->teamScores[2], string));
+    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE,
+                           va("b %i %i %i%s", visiblePlayers, level->teamScores[1], level->teamScores[2], string));
 }
 
 void UCMD_custom_sprint(client_t* cl)
