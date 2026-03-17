@@ -2135,14 +2135,24 @@ void SV_CalculatePing(client_t* cl)
 {
     int total = 0;
     int count = 0;
+    int samples = 0;
 
-    for (int i = 0; i < PACKET_BACKUP; i++)
+    for (int i = 0; i < PACKET_BACKUP && samples < 6; i++)
     {
-        if (cl->frames[i].pingTime > 0)
-        {
-            total += cl->frames[i].pingTime;
-            count++;
-        }
+        int sent = cl->frames[i].messageSent;
+        int ack  = cl->frames[i].messageAcked;
+
+        if (ack <= 0 || sent <= 0)
+            continue;
+
+        int delta = ack - sent;
+
+        if (delta <= 0 || delta > 1000)
+            continue;
+
+        total += delta;
+        count++;
+        samples++;
     }
 
     if (count > 0)
@@ -2151,7 +2161,8 @@ void SV_CalculatePing(client_t* cl)
     }
     else
     {
-        cl->ping = 999;
+        if (cl->ping <= 0 || cl->ping > 999)
+            cl->ping = 999;
     }
 }
 
