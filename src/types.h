@@ -1079,6 +1079,9 @@ typedef struct customPlayerState_s
     bool noAutoPickup;
     bool hiddenFromScoreboard;
     bool mute;
+
+    int ping_samples[6];   
+    int ping_sample_index;
 } customPlayerState_t;
 
 typedef struct customChallenge_s
