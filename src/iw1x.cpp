@@ -581,6 +581,14 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
 
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
+
+                int ack = cl->messageAcknowledge;
+
+                if (ack >= 0 && ack < PACKET_BACKUP)
+                {
+                    cl->frames[ack & PACKET_MASK].messageAcked = svs.time;
+                }
+
                 if (cl->messageAcknowledge < 0) {
                     Com_Printf("Invalid reliableAcknowledge message from %s - reliableAcknowledge is %i\n", cl->name, cl->reliableAcknowledge);
                     return;
@@ -596,16 +604,6 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                 SV_Netchan_Decode(cl, msg->data + msg->readcount, msg->cursize - msg->readcount);
                 if (cl->state == CS_ZOMBIE)
                     return;
-
-                // ← الحل الأقوى والصحيح هنا
-                int now = Sys_Milliseconds64();
-                int rtt = now - cl->lastPacketTime;
-
-                if (rtt > 0 && rtt < 9999) {
-                    cl->ping = rtt;  // ← تحديث ping الحقيقي مباشرة (RTT)
-                }
-
-                cl->lastPacketTime = now;
 
                 SV_ExecuteClientMessage(cl, msg);
                 return;
@@ -2140,6 +2138,37 @@ static int SV_RateMsec(client_t client, int messageSize)
     return rateMsec;
 }
 
+void SV_CalculatePing(client_t* cl)
+{
+    int total = 0;
+    int count = 0;
+    int samples = 0;
+
+    for (int i = 0; i < PACKET_BACKUP && samples < 6; i++)
+    {
+        if (cl->frames[i].messageAcked <= 0)
+            continue;
+
+        int delta = cl->frames[i].messageAcked - cl->frames[i].messageSent;
+
+        if (delta > 0 && delta < 1000)
+        {
+            total += delta;
+            count++;
+            samples++;
+        }
+    }
+
+    if (count > 0)
+    {
+        cl->ping = total / count;
+    }
+    else
+    {
+        cl->ping = 999;
+    }
+}
+
 void custom_SV_SendClientMessages(void)
 {
     int i;
@@ -2154,6 +2183,9 @@ void custom_SV_SendClientMessages(void)
 
         if (!cl->state)
             continue;
+
+        SV_CalculatePing(cl);
+
         if (svs.time < cl->nextSnapshotTime)
             continue;
 
