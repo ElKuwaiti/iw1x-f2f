@@ -25,8 +25,6 @@
 #include "shared.h"
 #include "version.h"
 
-#define PING_SAMPLES 6
-
 //// Cvars
 cvar_t* com_cl_running;
 cvar_t* com_dedicated;
@@ -394,9 +392,11 @@ void custom_Com_Init(char* commandLine)
     // Register
     Cvar_Get("iw1x", "1", CVAR_SERVERINFO | CVAR_ROM);
     Cvar_Get("iw1x_date", __DATE__, CVAR_SERVERINFO | CVAR_ROM);
-    Cvar_Get("iw1x_version", "F2F [Mar 17 2026]", CVAR_SERVERINFO | CVAR_ROM);
+    Cvar_Get("iw1x_version", "FaceToFace", CVAR_SERVERINFO);
     Cvar_Get("sv_wwwBaseURL", "", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
     Cvar_Get("sv_wwwDownload", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
+    Cvar_Get("g_gametype_color", "7", CVAR_ARCHIVE);
+    Cvar_Get("mapname_color", "7", CVAR_ARCHIVE);
 
     // Register and create references
     airjump_heightScale = Cvar_Get("airjump_heightScale", "1.5", CVAR_ARCHIVE);
@@ -556,12 +556,14 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
     int qport;
     client_t* cl;
     int i;
-    int* unknown_var = (int*)0x080e30cc;
+
+    int* unknown_var = (int*)0x080e30cc; // Maybe related to scrVmGlob.loading
 
     if (msg->cursize < 4 || *(int*)msg->data != -1) {
+        //// See https://github.com/voron00/CoD2rev_Server/blob/b012c4b45a25f7f80dc3f9044fe9ead6463cb5c6/src/server/sv_game_mp.cpp#L399
         if (sv.skelTimeStamp++ == -1)
             sv.skelTimeStamp = 1;
-
+        ////
         *unknown_var = 1;
 
         MSG_BeginReading(msg);
@@ -570,7 +572,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
         cl = svs.clients;
 
         for (i = 0; i < sv_maxclients->integer; i++, cl++) {
-            if (cl->state != CS_FREE && NET_CompareBaseAdr(from, cl->netchan.remoteAddress) && (cl->netchan.qport == (qport & 0xFFFF))) {
+            if (cl->state != CS_FREE && NET_CompareBaseAdr(from, (cl->netchan).remoteAddress) && (cl->netchan).qport == (qport & 0xFFFF)) {
                 if (cl->netchan.remoteAddress.port != from.port) {
                     Com_Printf("SV_ReadPackets: fixing up a translated port\n");
                     cl->netchan.remoteAddress.port = from.port;
@@ -581,38 +583,37 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
 
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
-
-                int ack = cl->messageAcknowledge;
-
-                if (ack >= 0)
-                {
-                    int idx = ack & PACKET_MASK;
-                    cl->frames[idx].messageAcked = Sys_Milliseconds64();
-                }
-
                 if (cl->messageAcknowledge < 0) {
                     Com_Printf("Invalid reliableAcknowledge message from %s - reliableAcknowledge is %i\n", cl->name, cl->reliableAcknowledge);
                     return;
                 }
 
+                //// [exploit patch] freeze
+                /* See:
+                - https://github.com/callofduty4x/CoD4x_Server/pull/407
+                - https://github.com/diamante0018/MW3ServerFreezer
+                */
                 cl->reliableAcknowledge = MSG_ReadLong(msg);
                 if ((cl->reliableSequence - cl->reliableAcknowledge) > (MAX_RELIABLE_COMMANDS - 1) || cl->reliableAcknowledge < 0 || (cl->reliableSequence - cl->reliableAcknowledge) < 0) {
                     Com_Printf("Out of range reliableAcknowledge message from %s - cl->reliableSequence is %i, reliableAcknowledge is %i\n", cl->name, cl->reliableSequence, cl->reliableAcknowledge);
+
                     cl->reliableAcknowledge = cl->reliableSequence;
                     return;
                 }
+                ////
 
                 SV_Netchan_Decode(cl, msg->data + msg->readcount, msg->cursize - msg->readcount);
                 if (cl->state == CS_ZOMBIE)
                     return;
 
+                cl->lastPacketTime = svs.time;
                 SV_ExecuteClientMessage(cl, msg);
                 return;
             }
         }
 
         NET_OutOfBandPrint(NS_SERVER, from, "disconnect");
-        *unknown_var = 0;
+        unknown_var = 0;
         Hunk_ClearTempMemoryInternal();
     }
     else {
@@ -938,6 +939,31 @@ void custom_SV_GetChallenge(netadr_t from)
     SV_AuthorizeRequest(from, svs.challenges[i].challenge);
 }
 
+void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key, const char *value)
+{
+    const char* finalValue = value;
+    const char *colorCvarName = nullptr;
+
+    if(!strcmp(key, "gametype"))
+        colorCvarName = "g_gametype_color";
+    else if(!strcmp(key, "mapname"))
+        colorCvarName = "mapname_color";
+
+    if(colorCvarName)
+    {
+        const char *color = Cvar_VariableString(colorCvarName);
+
+        if(color && color[0] >= '0' && color[0] <= '7')
+        {
+            static char buffer[128];
+            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], value);
+            finalValue = buffer;
+        }
+    }
+
+    Info_SetValueForKey(s, key, finalValue);
+}
+
 void hook_SV_DirectConnect(netadr_t from)
 {
     // Prevent using connect as an amplifier
@@ -1090,77 +1116,62 @@ void custom_SVC_Status(netadr_t from)
     char infostring[MAX_INFO_STRING];
     char keywords[MAX_INFO_STRING];
     char status[MAX_MSGLEN];
-    int statusLength = 0;
+    int statusLength;
+    size_t playerLength;
     int i;
     client_t* cl;
+    char* g_password;
 
     if (SVC_ApplyStatusLimit(from))
         return;
 
     strcpy(infostring, Cvar_InfoString(CVAR_SERVERINFO));
+
     Info_SetValueForKey(infostring, "challenge", Cmd_Argv(1));
 
-    if (Cvar_VariableValue("fs_restrict"))
-    {
+    if (Cvar_VariableValue("fs_restrict")) {
         Com_sprintf(keywords, sizeof(keywords), "demo %s", Info_ValueForKey(infostring, "sv_keywords"));
         Info_SetValueForKey(infostring, "sv_keywords", keywords);
     }
 
     status[0] = 0;
-
-    for (i = 0; i < sv_maxclients->integer; i++)
-    {
+    statusLength = 0;
+    for (i = 0; i < sv_maxclients->integer; i++) {
         cl = &svs.clients[i];
-        if (cl->state < CS_CONNECTED)
-            continue;
+        if (cl->state >= CS_CONNECTED) {
+            int clientScore = 0;
+            int clientDeath = 0;
+            if (gvm) {
+                clientScore = VM_Call(gvm, GAME_CLIENT_SCORE_GET, cl - svs.clients);
+                if (cl->gentity)
+                    clientDeath = cl->gentity->client->sess.deaths;
+            }
 
-        int clientScore = 0;
-        int clientDeath = 0;
-        if (gvm)
-        {
-            clientScore = VM_Call(gvm, GAME_CLIENT_SCORE_GET, cl - svs.clients);
-            if (cl->gentity)
-                clientDeath = cl->gentity->client->sess.deaths;
+            if (sv_statusShowDeath->integer)
+                Com_sprintf(player, sizeof(player), "%s %i \"%s\"\n", va("k:%i;d:%i", clientScore, clientDeath), cl->ping, cl->name);
+            else
+                Com_sprintf(player, sizeof(player), "%i %i \"%s\"\n", clientScore, cl->ping, cl->name);
+
+            playerLength = strlen(player);
+            if (statusLength + playerLength >= sizeof(status))
+                break;
+
+            strcpy(status + statusLength, player);
+            statusLength += playerLength;
         }
-
-        int realPing = cl->ping;
-
-        if (realPing <= 0 || realPing >= 9999)
-            realPing = 999;
-
-        if (sv_statusShowDeath->integer)
-        {
-            Com_sprintf(player, sizeof(player),
-                        "%s %i \"%s\"\n",
-                        va("k:%i;d:%i", clientScore, clientDeath),
-                        realPing,
-                        cl->name);
-        }
-        else
-        {
-            Com_sprintf(player, sizeof(player),
-                        "%i %i \"%s\"\n",
-                        clientScore,
-                        realPing,
-                        cl->name);
-        }
-
-        size_t playerLength = strlen(player);
-        if (statusLength + playerLength >= sizeof(status))
-            break;
-
-        strcpy(status + statusLength, player);
-        statusLength += playerLength;
     }
 
-    char* g_password = Cvar_VariableString("g_password");
+    g_password = Cvar_VariableString("g_password");
     Info_SetValueForKey(infostring, "pswrd", va("%i", *g_password ? 1 : 0));
+
+    // Inform about fs_game usage, by default for player's convenience
     Info_SetValueForKey(infostring, "fs_game", va("%s", *fs_game->string ? fs_game->string : "0"));
 
-    if (sv_statusShowTeamScore->integer && gvm)
-    {
-        Info_SetValueForKey(infostring, "score_allies", va("%i", level->teamScores[2]));
-        Info_SetValueForKey(infostring, "score_axis", va("%i", level->teamScores[1]));
+    if (sv_statusShowTeamScore->integer) {
+        if (gvm) {
+            Info_SetValueForKey(infostring, "score_allies", va("%i", level->teamScores[2]));
+            Info_SetValueForKey(infostring, "score_axis", va("%i", level->teamScores[1]));
+        }
     }
 
     NET_OutOfBandPrint(NS_SERVER, from, "statusResponse\n%s\n%s", infostring, status);
@@ -2139,49 +2150,6 @@ static int SV_RateMsec(client_t client, int messageSize)
     return rateMsec;
 }
 
-void SV_CalculatePing(client_t* cl)
-{
-    int total = 0;
-    int count = 0;
-
-    int now = Sys_Milliseconds64();
-
-    for (int i = 0; i < PACKET_BACKUP; i++)
-    {
-        int sent = cl->frames[i].messageSent;
-
-        if (sent <= 0)
-            continue;
-
-        int delta = now - sent;
-
-        // فلترة القيم الغلط
-        if (delta <= 0 || delta > 1000)
-            continue;
-
-        total += delta;
-        count++;
-
-        if (count >= 6)
-            break;
-    }
-
-    if (count > 0)
-    {
-        int ping = total / count;
-
-        // smoothing
-        if (cl->ping > 0)
-            cl->ping = (cl->ping * 3 + ping) / 4;
-        else
-            cl->ping = ping;
-    }
-    else
-    {
-        cl->ping = 999;
-    }
-}
-
 void custom_SV_SendClientMessages(void)
 {
     int i;
@@ -2196,9 +2164,6 @@ void custom_SV_SendClientMessages(void)
 
         if (!cl->state)
             continue;
-
-        SV_CalculatePing(cl);
-
         if (svs.time < cl->nextSnapshotTime)
             continue;
 
@@ -2276,13 +2241,9 @@ void custom_SV_SendMessageToClient(msg_t* msg, client_t* client)
     if (client->dropReason) {
         SV_DropClient(client, client->dropReason);
     }
-    int seq = client->netchan.outgoingSequence + 1;
-
-    client->frames[seq & PACKET_MASK].messageSent = Sys_Milliseconds64();
-    client->frames[seq & PACKET_MASK].messageAcked = -1;
-
-    SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
-
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = compressedSize;
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.time;
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
     SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
 
     if (client->netchan.remoteAddress.type == NA_LOOPBACK || Sys_IsLANAddress(client->netchan.remoteAddress) || (sv_fastDownload->integer && client->download)) {
@@ -2930,49 +2891,39 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
     int stringlength;
     char string[1400];
     char entry[1024];
-    int visiblePlayers = 0;
+    int visiblePlayers;
 
     string[0] = 0;
     stringlength = 0;
+    visiblePlayers = 0;
 
     numSorted = level->numConnectedClients;
+
     if (level->numConnectedClients > MAX_CLIENTS)
         numSorted = MAX_CLIENTS;
 
-    for (i = 0; i < numSorted; i++)
-    {
+    for (i = 0; i < numSorted; i++) {
         clientNum = level->sortedClients[i];
         client = &level->clients[clientNum];
-
         if (customPlayerState[clientNum].hiddenFromScoreboard)
             continue;
 
-        if (client->sess.connected == CON_CONNECTING)
-        {
-            Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
-                        level->sortedClients[i],
-                        client->sess.score,
-                        -1,
-                        client->sess.deaths,
-                        client->sess.statusIcon);
+        if (client->sess.connected == CON_CONNECTING) {
+            Com_sprintf(entry, 0x400u, " %i %i %i %i %i", level->sortedClients[i], client->sess.score, -1, client->sess.deaths, client->sess.statusIcon);
         }
-        else
-        {
+        else {
+            /*
+            Send cl->ping instead of cl->ps.ping,
+            to fix the scoreboard showing the ping of the player your are spectating as being your own ping.
+            */
             ping = svs.clients[clientNum].ping;
 
-            if (ping <= 0 || ping >= 9999)
-                ping = 999;
-
-            Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
-                        level->sortedClients[i],
-                        client->sess.score,
-                        ping,
-                        client->sess.deaths,
-                        client->sess.statusIcon);
+            Com_sprintf(entry, 0x400u, " %i %i %i %i %i", level->sortedClients[i], client->sess.score, ping, client->sess.deaths, client->sess.statusIcon);
         }
 
         len = strlen(entry);
-        if (stringlength + len > sizeof(string) - 1)
+
+        if (stringlength + len > 1024)
             break;
 
         strcpy(&string[stringlength], entry);
@@ -2980,8 +2931,7 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
         visiblePlayers++;
     }
 
-    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE,
-                           va("b %i %i %i%s", visiblePlayers, level->teamScores[1], level->teamScores[2], string));
+    trap_SendServerCommand(ent - g_entities, SV_CMD_RELIABLE, va("b %i %i %i%s", visiblePlayers, level->teamScores[1], level->teamScores[2], string));
 }
 
 void UCMD_custom_sprint(client_t* cl)
@@ -3276,6 +3226,8 @@ class iw1x
         hook_call(0x0808c7b8, (int)hook_SV_DirectConnect);
         hook_call(0x0808c7ea, (int)hook_SV_AuthorizeIpPacket);
         hook_call(0x0808c74e, (int)hook_SVC_Info);
+        hook_call(0x0808c2cd, (int)hook_SVC_Info_Info_SetValueForKey_gametype_mapname);
+        hook_call(0x0808c25e, (int)hook_SVC_Info_Info_SetValueForKey_gametype_mapname);
         hook_call(0x08089db9, (int)hook_SV_SetConfigstring_SV_SendServerCommand_cs);
 
         hook_jmp(0x080717a4, (int)custom_FS_ReferencedPakChecksums);
