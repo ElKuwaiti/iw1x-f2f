@@ -582,7 +582,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
 
-                int ack = cl->messageAcknowledge;
+                int ack = cl->netchan.incomingAcknowledged;
 
                 if (ack >= 0)
                 {
@@ -2269,7 +2269,7 @@ void custom_SV_SendMessageToClient(msg_t* msg, client_t* client)
     client->frames[seq & PACKET_MASK].messageSize = compressedSize;
     client->frames[seq & PACKET_MASK].messageSent = Sys_Milliseconds64();
     client->frames[seq & PACKET_MASK].messageAcked = -1;
-    
+
     SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
 
     if (client->netchan.remoteAddress.type == NA_LOOPBACK || Sys_IsLANAddress(client->netchan.remoteAddress) || (sv_fastDownload->integer && client->download)) {
