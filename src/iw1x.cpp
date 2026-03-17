@@ -1129,6 +1129,7 @@ void custom_SVC_Status(netadr_t from)
                 clientDeath = cl->gentity->client->sess.deaths;
         }
 
+        // أقوى حل: نفس الـ ping الرسمي اللي الـ Masterlist بياخده
         int realPing = cl->ping;
 
         if (realPing <= 0 || realPing >= 9999)
@@ -2914,8 +2915,10 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
         }
         else
         {
+            // أقوى حل: نستخدم الـ ping الرسمي اللي اللعبة والـ Masterlist بيثقوا فيه
             ping = svs.clients[clientNum].ping;
 
+            // فلتر أمان فقط (مش تعديل)
             if (ping <= 0 || ping >= 9999)
                 ping = 999;
 
