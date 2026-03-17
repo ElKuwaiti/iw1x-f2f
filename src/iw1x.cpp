@@ -2144,25 +2144,18 @@ void SV_CalculatePing(client_t* cl)
     int total = 0;
     int count = 0;
 
-    int current = cl->netchan.outgoingSequence;
-    int incoming = cl->netchan.incomingAcknowledged;
+    int now = Sys_Milliseconds64();
 
     for (int i = 0; i < PACKET_BACKUP; i++)
     {
-        int seq = (incoming - i);
-
-        if (seq <= 0)
-            break;
-
-        int idx = seq & PACKET_MASK;
-
-        int sent = cl->frames[idx].messageSent;
+        int sent = cl->frames[i].messageSent;
 
         if (sent <= 0)
             continue;
 
-        int delta = Sys_Milliseconds64() - sent;
+        int delta = now - sent;
 
+        // فلترة القيم الغلط
         if (delta <= 0 || delta > 1000)
             continue;
 
@@ -2177,7 +2170,7 @@ void SV_CalculatePing(client_t* cl)
     {
         int ping = total / count;
 
-        // smoothing بسيط
+        // smoothing
         if (cl->ping > 0)
             cl->ping = (cl->ping * 3 + ping) / 4;
         else
