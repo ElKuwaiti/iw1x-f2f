@@ -584,7 +584,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
 
                 int ack = cl->messageAcknowledge;
 
-                if (ack >= 0 && ack < PACKET_BACKUP)
+                if (ack >= 0)
                 {
                     cl->frames[ack & PACKET_MASK].messageAcked = Sys_Milliseconds64();
                 }
