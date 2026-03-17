@@ -1129,22 +1129,10 @@ void custom_SVC_Status(netadr_t from)
                 clientDeath = cl->gentity->client->sess.deaths;
         }
 
-        int sum = 0;
-        int count = 0;
-        for (int j = 0; j < PING_SAMPLES; j++)
-        {
-            int val = customPlayerState[i].ping_samples[j];
-            if (val > 0 && val < 2000)
-            {
-                sum += val;
-                count++;
-            }
-        }
+        int realPing = cl->ping;
 
-        int oneWay = (count >= 2) ? (sum / count) : cl->ping;
-        int realPing = (oneWay * 2);                   
-        if (realPing < 20)  realPing = 20;
-        if (realPing > 999) realPing = 999;
+        if (realPing <= 0 || realPing >= 9999)
+            realPing = 999;
 
         if (sv_statusShowDeath->integer)
         {
@@ -2926,23 +2914,10 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
         }
         else
         {
-            int sum = 0;
-            int count = 0;
-            for (int j = 0; j < PING_SAMPLES; j++)
-            {
-                int val = customPlayerState[clientNum].ping_samples[j];
-                if (val > 0 && val < 2000)
-                {
-                    sum += val;
-                    count++;
-                }
-            }
+            ping = svs.clients[clientNum].ping;
 
-            int oneWay = (count >= 2) ? (sum / count) : svs.clients[clientNum].ping;
-            ping = (oneWay * 2);                  
-
-            if (ping < 20)  ping = 20;
-            if (ping > 999) ping = 999;
+            if (ping <= 0 || ping >= 9999)
+                ping = 999;
 
             Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
                         level->sortedClients[i],
