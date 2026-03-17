@@ -942,25 +942,41 @@ void custom_SV_GetChallenge(netadr_t from)
 void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key, const char *value)
 {
     const char* finalValue = value;
+    const char *colorCvarName = NULL;
 
+    // 🎮 gametype
     if(!strcmp(key, "gametype"))
     {
-        const char *color = Cvar_VariableString("g_gametype_color");
-        if(color && color[0] >= '0' && color[0] <= '7')
-        {
-            static char buffer[128];
-            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], value);
-            finalValue = buffer;
-        }
+        colorCvarName = "g_gametype_color";
     }
+    // 🗺️ mapname
     else if(!strcmp(key, "mapname"))
     {
-        const char *color = Cvar_VariableString("mapname_color");
+        colorCvarName = "mapname_color";
+    }
+
+    // لو ده key مهم
+    if(colorCvarName)
+    {
+        const char *color = Cvar_VariableString(colorCvarName);
+
         if(color && color[0] >= '0' && color[0] <= '7')
         {
             static char buffer[128];
-            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], value);
+
+            // 👇 نمنع أي حروف غريبة (زي مشكلة P Carentan)
+            const char* cleanValue = value;
+
+            // شيل mp_ لو موجودة
+            if(!strcmp(key, "mapname") && !strncmp(value, "mp_", 3))
+                cleanValue = value + 3;
+
+            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], cleanValue);
             finalValue = buffer;
+        }
+        else if(color && color[0] != '\0')
+        {
+            Com_Printf("%s should be between 0-7\n", colorCvarName);
         }
     }
 
