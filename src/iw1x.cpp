@@ -582,13 +582,6 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
 
-                int ack = cl->netchan.incomingSequence;
-
-                if (ack >= 0)
-                {
-                    cl->frames[ack & PACKET_MASK].messageAcked = Sys_Milliseconds64();
-                }
-
                 if (cl->messageAcknowledge < 0) {
                     Com_Printf("Invalid reliableAcknowledge message from %s - reliableAcknowledge is %i\n", cl->name, cl->reliableAcknowledge);
                     return;
@@ -2142,27 +2135,19 @@ void SV_CalculatePing(client_t* cl)
 {
     int total = 0;
     int count = 0;
-    int samples = 0;
 
-    for (int i = 0; i < PACKET_BACKUP && samples < 6; i++)
+    for (int i = 0; i < PACKET_BACKUP; i++)
     {
-        if (cl->frames[i].messageAcked <= 0)
-            continue;
-
-        int delta = cl->frames[i].messageAcked - cl->frames[i].messageSent;
-
-        if (delta > 0 && delta < 1000)
+        if (cl->frames[i].pingTime > 0)
         {
-            total += delta;
+            total += cl->frames[i].pingTime;
             count++;
-            samples++;
         }
     }
 
     if (count > 0)
     {
-        int newPing = total / count;
-        cl->ping = (cl->ping * 3 + newPing) / 4;
+        cl->ping = total / count;
     }
     else
     {
