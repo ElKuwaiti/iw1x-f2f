@@ -227,6 +227,14 @@ static ucmd_t ucmds[] = {{
                          },
                          {NULL, NULL}};
 
+#define PING_SAMPLES 6
+
+typedef struct 
+{
+    int ping_samples[PING_SAMPLES];      
+    int ping_sample_index;              
+} customPlayerState_t;
+
 customPlayerState_t customPlayerState[MAX_CLIENTS];
 customChallenge_t customChallenge[MAX_CHALLENGES];
 
@@ -392,7 +400,7 @@ void custom_Com_Init(char* commandLine)
     // Register
     Cvar_Get("iw1x", "1", CVAR_SERVERINFO | CVAR_ROM);
     Cvar_Get("iw1x_date", __DATE__, CVAR_SERVERINFO | CVAR_ROM);
-    Cvar_Get("iw1x_version", "FaceToFace [2026]", CVAR_SERVERINFO | CVAR_ROM);
+    Cvar_Get("iw1x_version", "F2F [Mar 17 2026]", CVAR_SERVERINFO | CVAR_ROM);
     Cvar_Get("sv_wwwBaseURL", "", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
     Cvar_Get("sv_wwwDownload", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
 
@@ -605,6 +613,11 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                     return;
 
                 cl->lastPacketTime = svs.time;
+                int current_ping = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime);
+
+                int clientNum = cl - svs.clients;
+                customPlayerState[clientNum].ping_samples[customPlayerState[clientNum].ping_sample_index] = current_ping;
+                customPlayerState[clientNum].ping_sample_index = (customPlayerState[clientNum].ping_sample_index + 1) % PING_SAMPLES;
                 SV_ExecuteClientMessage(cl, msg);
                 return;
             }
@@ -1124,10 +1137,29 @@ void custom_SVC_Status(netadr_t from)
                 clientDeath = cl->gentity->client->sess.deaths;
         }
 
-        int realPing = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime);
+        int sum = 0;
+        int count = 0;
+        for (int j = 0; j < PING_SAMPLES; j++)
+        {
+            int val = customPlayerState[i].ping_samples[j];
+            if (val > 10 && val < 999)
+            {
+                sum += val;
+                count++;
+            }
+        }
 
-        if (realPing < 0 || realPing > 9999)
-            realPing = cl->ping;  
+        int realPing;
+        if (count >= 2)
+        {
+            realPing = sum / count;
+        }
+        else
+        {
+            realPing = cl->ping;
+            if (realPing <= 0 || realPing >= 9999)
+                realPing = 999;
+        }
 
         if (sv_statusShowDeath->integer)
         {
@@ -1157,7 +1189,6 @@ void custom_SVC_Status(netadr_t from)
     char* g_password = Cvar_VariableString("g_password");
     Info_SetValueForKey(infostring, "pswrd", va("%i", *g_password ? 1 : 0));
 
-    // Inform about fs_game usage
     Info_SetValueForKey(infostring, "fs_game", va("%s", *fs_game->string ? fs_game->string : "0"));
 
     if (sv_statusShowTeamScore->integer && gvm)
@@ -2911,10 +2942,28 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
         }
         else
         {
-            ping = (int)(Sys_Milliseconds64() - (uint64_t)svs.clients[clientNum].lastPacketTime);
+            int sum = 0;
+            int count = 0;
+            for (int j = 0; j < PING_SAMPLES; j++)
+            {
+                int val = customPlayerState[clientNum].ping_samples[j];
+                if (val > 10 && val < 999)  
+                {
+                    sum += val;
+                    count++;
+                }
+            }
 
-            if (ping < 0 || ping > 9999)
+            if (count >= 2) 
+            {
+                ping = sum / count;
+            }
+            else
+            {
                 ping = svs.clients[clientNum].ping;
+                if (ping <= 0 || ping >= 9999)
+                    ping = 999; 
+            }
 
             Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
                         level->sortedClients[i],
