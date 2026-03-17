@@ -955,7 +955,6 @@ void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key
         colorCvarName = "mapname_color";
     }
 
-    // لو ده key مهم
     if(colorCvarName)
     {
         const char *color = Cvar_VariableString(colorCvarName);
@@ -963,11 +962,9 @@ void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key
         if(color && color[0] >= '0' && color[0] <= '7')
         {
             static char buffer[128];
-
-            // 👇 نمنع أي حروف غريبة (زي مشكلة P Carentan)
             const char* cleanValue = value;
 
-            // شيل mp_ لو موجودة
+            // 🧹 شيل mp_ من الماب
             if(!strcmp(key, "mapname") && !strncmp(value, "mp_", 3))
                 cleanValue = value + 3;
 
@@ -975,8 +972,12 @@ void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key
             strncpy(formatted, cleanValue, sizeof(formatted));
             formatted[sizeof(formatted)-1] = '\0';
 
-            if(formatted[0] >= 'a' && formatted[0] <= 'z')
-                formatted[0] = formatted[0] - 32;
+            // 🎯 Capital للـ mapname فقط
+            if(!strcmp(key, "mapname"))
+            {
+                if(formatted[0] >= 'a' && formatted[0] <= 'z')
+                    formatted[0] -= 32;
+            }
 
             snprintf(buffer, sizeof(buffer), "^%c%s", color[0], formatted);
             finalValue = buffer;
