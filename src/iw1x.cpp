@@ -556,14 +556,12 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
     int qport;
     client_t* cl;
     int i;
-
-    int* unknown_var = (int*)0x080e30cc; // Maybe related to scrVmGlob.loading
+    int* unknown_var = (int*)0x080e30cc;
 
     if (msg->cursize < 4 || *(int*)msg->data != -1) {
-        //// See https://github.com/voron00/CoD2rev_Server/blob/b012c4b45a25f7f80dc3f9044fe9ead6463cb5c6/src/server/sv_game_mp.cpp#L399
         if (sv.skelTimeStamp++ == -1)
             sv.skelTimeStamp = 1;
-        ////
+
         *unknown_var = 1;
 
         MSG_BeginReading(msg);
@@ -572,7 +570,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
         cl = svs.clients;
 
         for (i = 0; i < sv_maxclients->integer; i++, cl++) {
-            if (cl->state != CS_FREE && NET_CompareBaseAdr(from, (cl->netchan).remoteAddress) && (cl->netchan).qport == (qport & 0xFFFF)) {
+            if (cl->state != CS_FREE && NET_CompareBaseAdr(from, cl->netchan.remoteAddress) && (cl->netchan.qport == (qport & 0xFFFF))) {
                 if (cl->netchan.remoteAddress.port != from.port) {
                     Com_Printf("SV_ReadPackets: fixing up a translated port\n");
                     cl->netchan.remoteAddress.port = from.port;
@@ -588,38 +586,34 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                     return;
                 }
 
-                //// [exploit patch] freeze
-                /* See:
-                - https://github.com/callofduty4x/CoD4x_Server/pull/407
-                - https://github.com/diamante0018/MW3ServerFreezer
-                */
                 cl->reliableAcknowledge = MSG_ReadLong(msg);
                 if ((cl->reliableSequence - cl->reliableAcknowledge) > (MAX_RELIABLE_COMMANDS - 1) || cl->reliableAcknowledge < 0 || (cl->reliableSequence - cl->reliableAcknowledge) < 0) {
                     Com_Printf("Out of range reliableAcknowledge message from %s - cl->reliableSequence is %i, reliableAcknowledge is %i\n", cl->name, cl->reliableSequence, cl->reliableAcknowledge);
-
                     cl->reliableAcknowledge = cl->reliableSequence;
                     return;
                 }
-                ////
 
                 SV_Netchan_Decode(cl, msg->data + msg->readcount, msg->cursize - msg->readcount);
                 if (cl->state == CS_ZOMBIE)
                     return;
 
-                cl->lastPacketTime = svs.time;
-                cl->ping = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime) * 2; 
-                int current_ping = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime);
+                // ← الحل الأقوى والصحيح هنا
+                int now = Sys_Milliseconds64();
+                int rtt = now - cl->lastPacketTime;
 
-                int clientNum = cl - svs.clients;
-                customPlayerState[clientNum].ping_samples[customPlayerState[clientNum].ping_sample_index] = current_ping;
-                customPlayerState[clientNum].ping_sample_index = (customPlayerState[clientNum].ping_sample_index + 1) % PING_SAMPLES;
+                if (rtt > 0 && rtt < 9999) {
+                    cl->ping = rtt;  // ← تحديث ping الحقيقي مباشرة (RTT)
+                }
+
+                cl->lastPacketTime = now;
+
                 SV_ExecuteClientMessage(cl, msg);
                 return;
             }
         }
 
         NET_OutOfBandPrint(NS_SERVER, from, "disconnect");
-        unknown_var = 0;
+        *unknown_var = 0;
         Hunk_ClearTempMemoryInternal();
     }
     else {
@@ -1130,7 +1124,6 @@ void custom_SVC_Status(netadr_t from)
                 clientDeath = cl->gentity->client->sess.deaths;
         }
 
-        // أقوى حل: نستخدم cl->ping اللي حدثناه في PacketEvent (متطابق مع Masterlist)
         int realPing = cl->ping;
 
         if (realPing <= 0 || realPing >= 9999)
