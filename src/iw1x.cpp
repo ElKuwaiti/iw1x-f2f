@@ -25,6 +25,8 @@
 #include "shared.h"
 #include "version.h"
 
+#define PING_SAMPLES 6
+
 //// Cvars
 cvar_t* com_cl_running;
 cvar_t* com_dedicated;
@@ -226,14 +228,6 @@ static ucmd_t ucmds[] = {{
                              UCMD_custom_sprint,
                          },
                          {NULL, NULL}};
-
-#define PING_SAMPLES 6
-
-typedef struct 
-{
-    int ping_samples[PING_SAMPLES];      
-    int ping_sample_index;              
-} customPlayerState_t;
 
 customPlayerState_t customPlayerState[MAX_CLIENTS];
 customChallenge_t customChallenge[MAX_CHALLENGES];
