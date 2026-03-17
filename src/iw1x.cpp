@@ -582,8 +582,13 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
 
-                int ack = cl->messageAcknowledge & PACKET_MASK;
-                cl->frames[ack].messageAcked = Sys_Milliseconds64();
+                int ack = cl->messageAcknowledge;
+
+                if (ack >= 0)
+                {
+                    int idx = ack & PACKET_MASK;
+                    cl->frames[idx].messageAcked = Sys_Milliseconds64();
+                }
 
                 if (cl->messageAcknowledge < 0) {
                     Com_Printf("Invalid reliableAcknowledge message from %s - reliableAcknowledge is %i\n", cl->name, cl->reliableAcknowledge);
@@ -2271,11 +2276,12 @@ void custom_SV_SendMessageToClient(msg_t* msg, client_t* client)
     if (client->dropReason) {
         SV_DropClient(client, client->dropReason);
     }
-    int seq = client->netchan.outgoingSequence;
+    int seq = client->netchan.outgoingSequence + 1;
 
-    client->frames[seq & PACKET_MASK].messageSize = compressedSize;
     client->frames[seq & PACKET_MASK].messageSent = Sys_Milliseconds64();
     client->frames[seq & PACKET_MASK].messageAcked = -1;
+
+    SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
 
     SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
 
