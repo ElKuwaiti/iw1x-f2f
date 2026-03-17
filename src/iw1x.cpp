@@ -971,7 +971,14 @@ void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key
             if(!strcmp(key, "mapname") && !strncmp(value, "mp_", 3))
                 cleanValue = value + 3;
 
-            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], cleanValue);
+            char formatted[128];
+            strncpy(formatted, cleanValue, sizeof(formatted));
+            formatted[sizeof(formatted)-1] = '\0';
+
+            if(formatted[0] >= 'a' && formatted[0] <= 'z')
+                formatted[0] = formatted[0] - 32;
+
+            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], formatted);
             finalValue = buffer;
         }
         else if(color && color[0] != '\0')
