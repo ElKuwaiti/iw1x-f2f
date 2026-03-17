@@ -16,26 +16,37 @@ jobs:
       run: |
         export DEBIAN_FRONTEND=noninteractive
         ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+
         dpkg --add-architecture i386
         apt update
+
         apt install -y --no-install-recommends \
-          g++-multilib gcc-multilib \
+          gcc-multilib g++-multilib \
           libstdc++6:i386 \
-          libsqlite3-dev libsqlite3-dev:i386 \
-          libcurl4-openssl-dev libcurl4-openssl-dev:i386 \
-          libssl-dev libssl-dev:i386 \
-          python3-pip ninja-build pkg-config tzdata
+          libsqlite3-dev:i386 \
+          libcurl4-openssl-dev:i386 \
+          libssl-dev:i386 \
+          pkg-config ninja-build python3-pip tzdata
+
         dpkg-reconfigure -f noninteractive tzdata
+
         pip3 install meson
 
-    - name: Build
+    - name: Configure build (force 32-bit)
       run: |
-        meson setup build --buildtype=release \
+        export PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig
+        export PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig
+
+        meson setup build \
+          --buildtype=release \
           -Dcompile_sqlite=true \
           -Dcompile_curl=true \
           -Dcompile_ssl=true \
           -Denable_unsafe=true \
           -Dairjumps=true
+
+    - name: Build
+      run: |
         ninja -C build
 
     - name: Upload .so
