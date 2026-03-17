@@ -22,12 +22,12 @@
 /**************************************************************************/
 
 #ifndef IW1X_BRANCH
-#define IW1X_BRANCH "stable"
+#define IW1X_BRANCH "f2f"
 #endif
 
 #ifndef IW1X_VERSION
-#define IW1X_VERSION "0.1.0"
+#define IW1X_VERSION "f2f"
 #endif
 
 #define VERSION_INFO IW1X_VERSION "-" IW1X_BRANCH
-#define NAMED_VERSION_INFO "iw1x-server-k" VERSION_INFO
+#define NAMED_VERSION_INFO "facetoface" VERSION_INFO

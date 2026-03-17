@@ -390,9 +390,9 @@ void custom_Com_Init(char* commandLine)
     sv_showCommands = Cvar_FindVar("sv_showCommands");
 
     // Register
-    Cvar_Get("iw1x", "1", CVAR_SERVERINFO | CVAR_ROM);
-    Cvar_Get("iw1x_date", __DATE__, CVAR_SERVERINFO | CVAR_ROM);
-    Cvar_Get("iw1x_version", NAMED_VERSION_INFO, CVAR_SERVERINFO);
+    Cvar_Get("f2f", "1", CVAR_SERVERINFO | CVAR_ROM);
+    Cvar_Get("f2f_date", __DATE__, CVAR_SERVERINFO | CVAR_ROM);
+    Cvar_Get("f2f_version", "FaceToFace", CVAR_SERVERINFO);
     Cvar_Get("sv_wwwBaseURL", "", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
     Cvar_Get("sv_wwwDownload", "0", CVAR_ARCHIVE | CVAR_SYSTEMINFO);
 
@@ -1111,19 +1111,23 @@ void custom_SVC_Status(netadr_t from)
     statusLength = 0;
     for (i = 0; i < sv_maxclients->integer; i++) {
         cl = &svs.clients[i];
+
         if (cl->state >= CS_CONNECTED) {
             int clientScore = 0;
             int clientDeath = 0;
+
             if (gvm) {
                 clientScore = VM_Call(gvm, GAME_CLIENT_SCORE_GET, cl - svs.clients);
                 if (cl->gentity)
                     clientDeath = cl->gentity->client->sess.deaths;
             }
 
+            int realPing = cl->ping; 
+
             if (sv_statusShowDeath->integer)
-                Com_sprintf(player, sizeof(player), "%s %i \"%s\"\n", va("k:%i;d:%i", clientScore, clientDeath), cl->ping, cl->name);
+                Com_sprintf(player, sizeof(player), "%s %i \"%s\"\n", va("k:%i;d:%i", clientScore, clientDeath), realPing, cl->name);
             else
-                Com_sprintf(player, sizeof(player), "%i %i \"%s\"\n", clientScore, cl->ping, cl->name);
+                Com_sprintf(player, sizeof(player), "%i %i \"%s\"\n", clientScore, realPing, cl->name);
 
             playerLength = strlen(player);
             if (statusLength + playerLength >= sizeof(status))
@@ -1137,7 +1141,6 @@ void custom_SVC_Status(netadr_t from)
     g_password = Cvar_VariableString("g_password");
     Info_SetValueForKey(infostring, "pswrd", va("%i", *g_password ? 1 : 0));
 
-    // Inform about fs_game usage, by default for player's convenience
     Info_SetValueForKey(infostring, "fs_game", va("%s", *fs_game->string ? fs_game->string : "0"));
 
     if (sv_statusShowTeamScore->integer) {
@@ -2133,7 +2136,21 @@ void custom_SV_SendClientMessages(void)
     sv.ubpsTotalBytes = 0;
 
     for (i = 0; i < sv_maxclients->integer; i++) {
+
         cl = &svs.clients[i];
+
+        if (cl->state >= CS_CONNECTED)
+        {
+            int realPing = svs.time - cl->lastPacketTime;
+
+            if (realPing < 0)
+                realPing = 0;
+
+            if (realPing > 999)
+                realPing = 999;
+
+            cl->ping = realPing;
+        }
 
         if (!cl->state)
             continue;
@@ -3154,7 +3171,7 @@ class iw1x
   public:
     iw1x()
     {
-        printf("------------ iw1x ------------\n");
+        printf("------------ facetoface ------------\n");
         printf("Version:      %s-%s\n", IW1X_VERSION, IW1X_BRANCH);
         printf("Compiled At:  %s %s\n", __DATE__, __TIME__);
 #if defined(__clang__)
