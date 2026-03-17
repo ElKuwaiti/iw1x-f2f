@@ -14,9 +14,12 @@ jobs:
 
     - name: Install dependencies
       run: |
+        export DEBIAN_FRONTEND=noninteractive
+        ln -fs /usr/share/zoneinfo/UTC /etc/localtime
         dpkg --add-architecture i386
         apt update
-        apt install -y g++-multilib python3-pip ninja-build pkg-config
+        apt install -y --no-install-recommends g++-multilib python3-pip ninja-build pkg-config tzdata
+        dpkg-reconfigure -f noninteractive tzdata
         pip3 install meson
 
     - name: Build
