@@ -582,7 +582,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                 cl->serverId = MSG_ReadByte(msg);
                 cl->messageAcknowledge = MSG_ReadLong(msg);
 
-                int ack = cl->netchan.incomingAcknowledged;
+                int ack = cl->netchan.incomingSequence;
 
                 if (ack >= 0)
                 {
