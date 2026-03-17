@@ -19,10 +19,12 @@ jobs:
         dpkg --add-architecture i386
         apt update
         apt install -y --no-install-recommends \
-          g++-multilib gcc-multilib \
-          libstdc++6:i386 \
-          python3-pip ninja-build pkg-config \
-          tzdata
+        g++-multilib gcc-multilib \
+        libstdc++6:i386 \
+        libsqlite3-dev:i386 \
+        libcurl4-openssl-dev:i386 \
+        libssl-dev:i386 \
+        python3-pip ninja-build pkg-config tzdata
         dpkg-reconfigure -f noninteractive tzdata
         pip3 install meson
 
