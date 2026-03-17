@@ -93,6 +93,8 @@ stringIndex_t* scr_const;
 
 // Functions
 G_Say_t G_Say;
+typedef void (*Info_SetValueForKey_t)(char*, const char*, const char*);
+Info_SetValueForKey_t Info_SetValueForKey;
 G_RegisterCvars_t G_RegisterCvars;
 G_AddEvent_t G_AddEvent;
 G_AddPredictableEvent_t G_AddPredictableEvent;
@@ -942,17 +944,20 @@ void custom_SV_GetChallenge(netadr_t from)
 void hook_SVC_Info_Info_SetValueForKey_gametype_mapname(char *s, const char *key, const char *value)
 {
     const char* finalValue = value;
-    const char *colorCvarName = nullptr;
 
     if(!strcmp(key, "gametype"))
-        colorCvarName = "g_gametype_color";
-    else if(!strcmp(key, "mapname"))
-        colorCvarName = "mapname_color";
-
-    if(colorCvarName)
     {
-        const char *color = Cvar_VariableString(colorCvarName);
-
+        const char *color = Cvar_VariableString("g_gametype_color");
+        if(color && color[0] >= '0' && color[0] <= '7')
+        {
+            static char buffer[128];
+            snprintf(buffer, sizeof(buffer), "^%c%s", color[0], value);
+            finalValue = buffer;
+        }
+    }
+    else if(!strcmp(key, "mapname"))
+    {
+        const char *color = Cvar_VariableString("mapname_color");
         if(color && color[0] >= '0' && color[0] <= '7')
         {
             static char buffer[128];
@@ -3103,6 +3108,7 @@ void* custom_Sys_LoadDll(const char* name, char* fqpath, int (**entryPoint)(int,
     trap_SetConfigstring = (trap_SetConfigstring_t)dlsym(libHandle, "trap_SetConfigstring");
     trap_GetArchivedPlayerState = (trap_GetArchivedPlayerState_t)dlsym(libHandle, "trap_GetArchivedPlayerState");
     G_Error = (G_Error_t)dlsym(libHandle, "G_Error");
+    Info_SetValueForKey = (Info_SetValueForKey_t)dlsym(libHandle, "Info_SetValueForKey");
     Scr_GetPointerType = (Scr_GetPointerType_t)dlsym(libHandle, "Scr_GetPointerType");
     ////
 
