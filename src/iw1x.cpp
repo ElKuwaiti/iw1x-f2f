@@ -93,8 +93,6 @@ stringIndex_t* scr_const;
 
 // Functions
 G_Say_t G_Say;
-typedef void (*Info_SetValueForKey_t)(char*, const char*, const char*);
-Info_SetValueForKey_t Info_SetValueForKey;
 G_RegisterCvars_t G_RegisterCvars;
 G_AddEvent_t G_AddEvent;
 G_AddPredictableEvent_t G_AddPredictableEvent;
@@ -3108,7 +3106,6 @@ void* custom_Sys_LoadDll(const char* name, char* fqpath, int (**entryPoint)(int,
     trap_SetConfigstring = (trap_SetConfigstring_t)dlsym(libHandle, "trap_SetConfigstring");
     trap_GetArchivedPlayerState = (trap_GetArchivedPlayerState_t)dlsym(libHandle, "trap_GetArchivedPlayerState");
     G_Error = (G_Error_t)dlsym(libHandle, "G_Error");
-    Info_SetValueForKey = (Info_SetValueForKey_t)dlsym(libHandle, "Info_SetValueForKey");
     Scr_GetPointerType = (Scr_GetPointerType_t)dlsym(libHandle, "Scr_GetPointerType");
     ////
 
