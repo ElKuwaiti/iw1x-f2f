@@ -1,21 +1,28 @@
-name: Build iw1x
+name: Build f2f
 
 on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+
+    container:
+      image: ubuntu:20.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
-      run: sudo apt update && sudo apt install -y meson ninja-build gcc-multilib g++-multilib
+      run: |
+        dpkg --add-architecture i386
+        apt update
+        apt install -y g++-multilib python3-pip ninja-build pkg-config
+        pip3 install meson
 
     - name: Build
       run: |
-        meson setup build -Dcompile_sqlite=false -Dcompile_curl=false -Dcompile_ssl=false
-        meson compile -C build
+        meson setup build --buildtype=release -Dcompile_sqlite=false -Dcompile_curl=false -Dcompile_ssl=false
+        ninja -C build
 
     - name: Upload .so
       uses: actions/upload-artifact@v4
