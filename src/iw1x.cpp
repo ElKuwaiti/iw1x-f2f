@@ -2264,9 +2264,12 @@ void custom_SV_SendMessageToClient(msg_t* msg, client_t* client)
     if (client->dropReason) {
         SV_DropClient(client, client->dropReason);
     }
-    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = compressedSize;
-    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = Sys_Milliseconds64();
-    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
+    int seq = client->netchan.outgoingSequence;
+
+    client->frames[seq & PACKET_MASK].messageSize = compressedSize;
+    client->frames[seq & PACKET_MASK].messageSent = Sys_Milliseconds64();
+    client->frames[seq & PACKET_MASK].messageAcked = -1;
+    
     SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
 
     if (client->netchan.remoteAddress.type == NA_LOOPBACK || Sys_IsLANAddress(client->netchan.remoteAddress) || (sv_fastDownload->integer && client->download)) {
