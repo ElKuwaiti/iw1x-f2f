@@ -1117,13 +1117,11 @@ void custom_SVC_Status(netadr_t from)
     for (i = 0; i < sv_maxclients->integer; i++)
     {
         cl = &svs.clients[i];
-
         if (cl->state < CS_CONNECTED)
             continue;
 
         int clientScore = 0;
         int clientDeath = 0;
-
         if (gvm)
         {
             clientScore = VM_Call(gvm, GAME_CLIENT_SCORE_GET, cl - svs.clients);
@@ -1136,24 +1134,17 @@ void custom_SVC_Status(netadr_t from)
         for (int j = 0; j < PING_SAMPLES; j++)
         {
             int val = customPlayerState[i].ping_samples[j];
-            if (val > 10 && val < 999)
+            if (val > 0 && val < 2000)
             {
                 sum += val;
                 count++;
             }
         }
 
-        int realPing;
-        if (count >= 2)
-        {
-            realPing = sum / count;
-        }
-        else
-        {
-            realPing = cl->ping;
-            if (realPing <= 0 || realPing >= 9999)
-                realPing = 999;
-        }
+        int oneWay = (count >= 2) ? (sum / count) : cl->ping;
+        int realPing = (oneWay * 2);                   
+        if (realPing < 20)  realPing = 20;
+        if (realPing > 999) realPing = 999;
 
         if (sv_statusShowDeath->integer)
         {
@@ -1182,7 +1173,6 @@ void custom_SVC_Status(netadr_t from)
 
     char* g_password = Cvar_VariableString("g_password");
     Info_SetValueForKey(infostring, "pswrd", va("%i", *g_password ? 1 : 0));
-
     Info_SetValueForKey(infostring, "fs_game", va("%s", *fs_game->string ? fs_game->string : "0"));
 
     if (sv_statusShowTeamScore->integer && gvm)
@@ -2941,23 +2931,18 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
             for (int j = 0; j < PING_SAMPLES; j++)
             {
                 int val = customPlayerState[clientNum].ping_samples[j];
-                if (val > 10 && val < 999)  
+                if (val > 0 && val < 2000)
                 {
                     sum += val;
                     count++;
                 }
             }
 
-            if (count >= 2) 
-            {
-                ping = sum / count;
-            }
-            else
-            {
-                ping = svs.clients[clientNum].ping;
-                if (ping <= 0 || ping >= 9999)
-                    ping = 999; 
-            }
+            int oneWay = (count >= 2) ? (sum / count) : svs.clients[clientNum].ping;
+            ping = (oneWay * 2);                  
+
+            if (ping < 20)  ping = 20;
+            if (ping > 999) ping = 999;
 
             Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i",
                         level->sortedClients[i],
