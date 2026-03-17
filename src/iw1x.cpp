@@ -607,6 +607,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
                     return;
 
                 cl->lastPacketTime = svs.time;
+                cl->ping = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime) * 2; 
                 int current_ping = (int)(Sys_Milliseconds64() - (uint64_t)cl->lastPacketTime);
 
                 int clientNum = cl - svs.clients;
@@ -1129,7 +1130,7 @@ void custom_SVC_Status(netadr_t from)
                 clientDeath = cl->gentity->client->sess.deaths;
         }
 
-        // أقوى حل: نفس الـ ping الرسمي اللي الـ Masterlist بياخده
+        // أقوى حل: نستخدم cl->ping اللي حدثناه في PacketEvent (متطابق مع Masterlist)
         int realPing = cl->ping;
 
         if (realPing <= 0 || realPing >= 9999)
@@ -2915,10 +2916,8 @@ void custom_DeathmatchScoreboardMessage(gentity_t* ent)
         }
         else
         {
-            // أقوى حل: نستخدم الـ ping الرسمي اللي اللعبة والـ Masterlist بيثقوا فيه
             ping = svs.clients[clientNum].ping;
 
-            // فلتر أمان فقط (مش تعديل)
             if (ping <= 0 || ping >= 9999)
                 ping = 999;
 
