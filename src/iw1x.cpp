@@ -586,7 +586,7 @@ void custom_SV_PacketEvent(netadr_t from, msg_t* msg)
 
                 if (ack >= 0 && ack < PACKET_BACKUP)
                 {
-                    cl->frames[ack & PACKET_MASK].messageAcked = svs.time;
+                    cl->frames[ack & PACKET_MASK].messageAcked = Sys_Milliseconds64();
                 }
 
                 if (cl->messageAcknowledge < 0) {
@@ -2161,7 +2161,8 @@ void SV_CalculatePing(client_t* cl)
 
     if (count > 0)
     {
-        cl->ping = total / count;
+        int newPing = total / count;
+        cl->ping = (cl->ping * 3 + newPing) / 4;
     }
     else
     {
@@ -2264,7 +2265,7 @@ void custom_SV_SendMessageToClient(msg_t* msg, client_t* client)
         SV_DropClient(client, client->dropReason);
     }
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = compressedSize;
-    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.time;
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = Sys_Milliseconds64();
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
     SV_Netchan_Transmit(client, svCompressBuf, compressedSize);
 
