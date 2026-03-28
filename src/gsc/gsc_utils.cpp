@@ -625,6 +625,22 @@ void gsc_utils_gettype()
     Scr_AddString(stackGetParamTypeAsString(0));
 }
 
+void gsc_utils_websend()
+{
+    char* type;
+    char* data;
+
+    if (!stackGetParams("ss", &type, &data)) {
+        stackError("gsc_utils_websend() invalid parameters");
+        Scr_AddUndefined();
+        return;
+    }
+
+    Com_Printf("[WEB] Type: %s | Data: %s\n", type, data);
+
+    Scr_AddBool(qtrue);
+}
+
 #if COMPILE_SSL == 1
 void gsc_utils_hash()
 {
