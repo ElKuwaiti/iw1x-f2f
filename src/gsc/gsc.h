@@ -134,6 +134,7 @@ void gsc_utils_fclose();
 
 void gsc_utils_sendcommandtoclient();
 void gsc_utils_logprintconsole();
+void gsc_utils_websend();
 void gsc_utils_getsubstr();
 void gsc_utils_getascii();
 void gsc_utils_toupper();
