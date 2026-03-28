@@ -120,6 +120,7 @@ scr_function_t scriptFunctions[] = {
     {"strstr", gsc_utils_strstr, 0},
     {"monotone", gsc_utils_monotone, 0},
     {"getType", gsc_utils_gettype, 0},
+    {"webSend", gsc_utils_websend, 0},
 
     // Weapons
     {"getWeaponStrProperty", gsc_weapons_getweaponstrproperty, 0},
