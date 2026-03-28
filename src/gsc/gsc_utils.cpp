@@ -636,7 +636,25 @@ void gsc_utils_websend()
         return;
     }
 
-    Com_Printf("[WEB] Type: %s | Data: %s\n", type, data);
+#if COMPILE_CURL == 1
+
+    CURL* curl = curl_easy_init();
+
+    if (curl)
+    {
+        std::string postFields = std::string("type=") + type + "&data=" + data;
+
+        curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:3000/api/stats"); // غيرها برابطك
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields.c_str());
+
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L); // مهم جدًا
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); // يمنع مشاكل threading
+
+        curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+
+#endif
 
     Scr_AddBool(qtrue);
 }
